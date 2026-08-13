@@ -69,9 +69,7 @@ data class Page<T>(
 data class RunDetails(
     val run: Run,
     val metrics: List<MetricDefinition>,
-    val summary: List<MetricValue>,
     val config: List<MetricValue>,
-    val system: List<MetricValue>,
 )
 
 data class UpdateInfo(

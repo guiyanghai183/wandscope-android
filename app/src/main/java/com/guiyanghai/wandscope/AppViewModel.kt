@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 data class AppUiState(
     val starting: Boolean = true,
     val loggedIn: Boolean = false,
+    val hasSavedApiKey: Boolean = false,
     val loading: Boolean = false,
     val loadingMore: Boolean = false,
     val loadingCurves: Boolean = false,
@@ -58,17 +59,38 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             if (existing == null) {
                 _state.update { it.copy(starting = false) }
             } else {
-                authenticate(existing, persist = false)
+                _state.update { it.copy(hasSavedApiKey = true) }
+                authenticate(existing)
             }
         }
     }
 
     fun login(apiKey: String) {
         if (apiKey.isBlank()) return
-        viewModelScope.launch { authenticate(apiKey, persist = true) }
+        viewModelScope.launch {
+            runCatching { secrets.saveApiKey(apiKey) }
+                .onSuccess {
+                    _state.update { it.copy(hasSavedApiKey = true) }
+                    authenticate(apiKey)
+                }
+                .onFailure { error ->
+                    _state.update { it.copy(starting = false, loading = false, error = safeMessage(error)) }
+                }
+        }
     }
 
-    private suspend fun authenticate(apiKey: String, persist: Boolean) {
+    fun retrySavedLogin() {
+        viewModelScope.launch {
+            val existing = secrets.readApiKey()
+            if (existing == null) {
+                _state.update { it.copy(hasSavedApiKey = false, error = "未找到已保存的 API Key") }
+            } else {
+                authenticate(existing)
+            }
+        }
+    }
+
+    private suspend fun authenticate(apiKey: String) {
         _state.update { it.copy(starting = false, loading = true, error = "") }
         runCatching {
             val nextApi = WandbApi(apiKey)
@@ -76,24 +98,45 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             nextApi to viewer
         }.onSuccess { (nextApi, viewer) ->
             api = nextApi
-            if (persist) secrets.saveApiKey(apiKey)
             val entity = preferences.lastEntity.takeIf { it in viewer.entities }
                 ?: viewer.entity.takeIf { it.isNotBlank() }
                 ?: viewer.entities.firstOrNull().orEmpty()
             preferences.lastEntity = entity
             _state.update {
-                AppUiState(starting = false, loggedIn = true, viewer = viewer, selectedEntity = entity, loading = false)
+                AppUiState(
+                    starting = false,
+                    loggedIn = true,
+                    hasSavedApiKey = true,
+                    viewer = viewer,
+                    selectedEntity = entity,
+                    loading = false,
+                )
             }
             RunMonitorWorker.schedule(getApplication())
             loadProjects(refresh = true)
             checkForUpdate(silent = true)
         }.onFailure { error ->
-            if (!persist) secrets.clear()
-            _state.update { it.copy(starting = false, loggedIn = false, loading = false, error = safeMessage(error)) }
+            _state.update {
+                it.copy(
+                    starting = false,
+                    loggedIn = false,
+                    hasSavedApiKey = secrets.readApiKey() != null,
+                    loading = false,
+                    error = safeMessage(error),
+                )
+            }
         }
     }
 
     fun logout() {
+        requestSerial++
+        foregroundPoll?.cancel()
+        api = null
+        RunMonitorWorker.cancel(getApplication())
+        _state.value = AppUiState(starting = false, hasSavedApiKey = secrets.readApiKey() != null)
+    }
+
+    fun forgetApiKey() {
         requestSerial++
         foregroundPoll?.cancel()
         api = null

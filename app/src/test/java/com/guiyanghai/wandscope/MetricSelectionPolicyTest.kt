@@ -5,6 +5,25 @@ import org.junit.Test
 
 class MetricSelectionPolicyTest {
     @Test
+    fun `wandb history type counts accept numeric types but reject mixed and strings`() {
+        assertEquals(true, MetricTypePolicy.isNumericHistory(listOf("number")))
+        assertEquals(true, MetricTypePolicy.isNumericHistory(listOf("float64", "none")))
+        assertEquals(false, MetricTypePolicy.isNumericHistory(listOf("string")))
+        assertEquals(false, MetricTypePolicy.isNumericHistory(listOf("number", "string")))
+        assertEquals(false, MetricTypePolicy.isNumericHistory(emptyList()))
+    }
+
+    @Test
+    fun `history categories follow the run metric namespace`() {
+        assertEquals("Train", MetricGroupingPolicy.category("train/loss", MetricSource.HISTORY))
+        assertEquals("Validation", MetricGroupingPolicy.category("validation/accuracy", MetricSource.HISTORY))
+        assertEquals("Charts", MetricGroupingPolicy.category("epoch", MetricSource.HISTORY))
+        assertEquals("System", MetricGroupingPolicy.category("cpu", MetricSource.SYSTEM))
+        assertEquals("loss", MetricGroupingPolicy.displayName("train/loss", "Train"))
+        assertEquals("epoch", MetricGroupingPolicy.displayName("epoch", "Charts"))
+    }
+
+    @Test
     fun `only explicit numeric history and system metrics are selectable`() {
         val metrics = listOf(
             metric("history:number", MetricSource.HISTORY, MetricKind.NUMBER, true),

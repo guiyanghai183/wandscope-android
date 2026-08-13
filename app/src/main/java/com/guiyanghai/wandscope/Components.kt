@@ -47,10 +47,15 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 fun BrandMark(modifier: Modifier = Modifier, size: Int = 58) {
@@ -172,7 +177,8 @@ fun MetricChart(title: String, subtitle: String, series: List<ChartSeries>) {
                     Text("暂无可绘制数据", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                 }
             } else {
-                ChartCanvas(series, Modifier.fillMaxWidth().height(180.dp))
+                ChartCanvas(series, Modifier.fillMaxWidth().height(168.dp))
+                HorizontalAxis(series)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     series.take(6).forEachIndexed { index, item ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -190,6 +196,7 @@ fun MetricChart(title: String, subtitle: String, series: List<ChartSeries>) {
 @Composable
 private fun ChartCanvas(series: List<ChartSeries>, modifier: Modifier) {
     val grid = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    val axis = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
     Canvas(modifier) {
         val all = series.flatMap { it.points }.filter { it.x.isFinite() && it.y.isFinite() }
         if (all.isEmpty()) return@Canvas
@@ -201,6 +208,11 @@ private fun ChartCanvas(series: List<ChartSeries>, modifier: Modifier) {
             val y = size.height * i / 4f
             drawLine(grid, Offset(0f, y), Offset(size.width, y), 1f)
         }
+        repeat(3) { i ->
+            val x = size.width * i / 2f
+            drawLine(grid, Offset(x, 0f), Offset(x, size.height), 1f)
+        }
+        drawLine(axis, Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f), 1.5.dp.toPx())
         series.forEachIndexed { index, item ->
             val points = item.points.filter { it.x.isFinite() && it.y.isFinite() }
             if (points.isEmpty()) return@forEachIndexed
@@ -217,6 +229,57 @@ private fun ChartCanvas(series: List<ChartSeries>, modifier: Modifier) {
     }
 }
 
+@Composable
+private fun HorizontalAxis(series: List<ChartSeries>) {
+    val points = series.flatMap { it.points }.filter { it.x.isFinite() }
+    if (points.isEmpty()) return
+    val min = points.minOf { it.x }
+    val max = points.maxOf { it.x }
+    val middle = (min + max) / 2.0
+    val source = series.firstOrNull()?.source ?: MetricSource.HISTORY
+    Column(Modifier.fillMaxWidth()) {
+        Canvas(Modifier.fillMaxWidth().height(7.dp)) {
+            val color = androidx.compose.ui.graphics.Color.Gray.copy(alpha = 0.75f)
+            drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx())
+            repeat(3) { index ->
+                val x = size.width * index / 2f
+                drawLine(color, Offset(x, 0f), Offset(x, 5.dp.toPx()), 1.dp.toPx())
+            }
+        }
+        Row(Modifier.fillMaxWidth()) {
+            Text(formatAxisValue(min, source), Modifier.weight(1f), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(formatAxisValue(middle, source), Modifier.weight(1f), fontSize = 10.sp, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(formatAxisValue(max, source), Modifier.weight(1f), fontSize = 10.sp, textAlign = TextAlign.End, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(
+            if (source == MetricSource.SYSTEM) "时间" else "Step",
+            Modifier.fillMaxWidth().padding(top = 2.dp),
+            fontSize = 10.sp,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun formatAxisValue(value: Double, source: MetricSource): String {
+    if (source == MetricSource.SYSTEM && value.isFinite() && value > 1_000_000_000.0) {
+        val milliseconds = if (value > 10_000_000_000.0) value.toLong() else (value * 1000.0).toLong()
+        return runCatching {
+            DateTimeFormatter.ofPattern("HH:mm:ss", Locale.getDefault())
+                .withZone(ZoneId.systemDefault())
+                .format(Instant.ofEpochMilli(milliseconds))
+        }.getOrNull() ?: compactNumber(value)
+    }
+    return compactNumber(value)
+}
+
+private fun compactNumber(value: Double): String = when {
+    !value.isFinite() -> "—"
+    abs(value) >= 1_000_000 || (abs(value) in 0.0..0.001 && value != 0.0) -> "%.2e".format(Locale.US, value)
+    abs(value - value.toLong()) < 1e-9 -> value.toLong().toString()
+    else -> "%.3f".format(Locale.US, value).trimEnd('0').trimEnd('.')
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MetricPickerSheet(
@@ -228,7 +291,7 @@ fun MetricPickerSheet(
     val selectable = remember(metrics) { MetricSelectionPolicy.selectable(metrics) }
     var selected by remember(initial) { mutableStateOf(initial.filter { id -> selectable.any { it.id == id } }.take(8)) }
     var category by remember { mutableStateOf<String?>(null) }
-    val groups = remember(selectable) { selectable.groupBy { if (it.source == MetricSource.SYSTEM) "System" else it.group.ifBlank { "Charts" } } }
+    val groups = remember(selectable) { selectable.groupBy { it.group.ifBlank { "Charts" } } }
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxWidth().height(560.dp)) {
@@ -270,7 +333,7 @@ fun MetricPickerSheet(
                             }.padding(horizontal = 4.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(metric.key.substringAfter('/'), Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(MetricGroupingPolicy.displayName(metric.key, metric.group), Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                             Box(
                                 Modifier.size(24.dp).clip(CircleShape)
                                     .background(if (checked) WandColors.Accent else Color.Transparent)

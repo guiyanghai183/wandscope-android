@@ -75,16 +75,13 @@ class WandbApi(
         val variables = JSONObject().put("entity", entity).put("project", project).put("name", runId)
         val run = execute(RUN_DETAILS_QUERY, variables)
             .requiredObject("project").requiredObject("run")
-        val summary = jsonScalar(run.opt("summaryMetrics"))
         val config = jsonScalar(run.opt("config"))
         val system = jsonScalar(run.opt("systemMetrics"))
         val history = jsonScalar(run.opt("historyKeys"))
         return RunDetails(
             run = decodeRun(run),
-            metrics = buildMetricCatalog(history, summary, system),
-            summary = metricValues(summary, MetricSource.SUMMARY, unwrapConfig = false),
+            metrics = buildMetricCatalog(history, system),
             config = metricValues(config, MetricSource.CONFIG, unwrapConfig = true),
-            system = metricValues(system, MetricSource.SYSTEM, unwrapConfig = false),
         )
     }
 
@@ -164,14 +161,21 @@ class WandbApi(
         )
     }
 
-    private fun buildMetricCatalog(historyRaw: JSONObject, summary: JSONObject, system: JSONObject): List<MetricDefinition> {
+    private fun buildMetricCatalog(historyRaw: JSONObject, system: JSONObject): List<MetricDefinition> {
         val history = historyRaw.optJSONObject("keys") ?: historyRaw
         val result = linkedMapOf<String, MetricDefinition>()
         history.keys().forEach { key ->
             if (key == "lastStep" || key.startsWith("_")) return@forEach
             val kind = historyKind(history.opt(key))
             if (kind == MetricKind.NUMBER) {
-                result["history:$key"] = MetricDefinition("history:$key", key, MetricSource.HISTORY, kind, groupFor(key), true)
+                result["history:$key"] = MetricDefinition(
+                    "history:$key",
+                    key,
+                    MetricSource.HISTORY,
+                    kind,
+                    MetricGroupingPolicy.category(key, MetricSource.HISTORY),
+                    true,
+                )
             }
         }
         system.keys().forEach { key ->
@@ -181,8 +185,6 @@ class WandbApi(
                 result["system:$key"] = MetricDefinition("system:$key", key, MetricSource.SYSTEM, kind, "System", true)
             }
         }
-        // Summary-only numeric values deliberately remain out of the curve picker.
-        summary.length()
         return result.values.sortedWith(compareBy<MetricDefinition> { it.group }.thenBy { it.key })
     }
 
@@ -215,16 +217,35 @@ class WandbApi(
 
     private fun pageCursor(container: JSONObject) = container.optJSONObject("pageInfo")?.optString("endCursor").orEmpty()
     private fun hasNext(container: JSONObject) = container.optJSONObject("pageInfo")?.optBoolean("hasNextPage") == true
-    private fun groupFor(key: String): String = key.substringBefore('/', "Charts").takeIf { key.contains('/') }
-        ?.replaceFirstChar { it.uppercase() } ?: "Charts"
-
     private fun historyKind(raw: Any?): MetricKind {
-        val type = when (raw) {
-            is JSONObject -> raw.optString("type")
-            is String -> raw
-            else -> ""
-        }.lowercase()
-        return if (type.contains("number") || type.contains("float") || type.contains("int")) MetricKind.NUMBER else MetricKind.UNKNOWN
+        val types = buildList {
+            when (raw) {
+                is String -> add(raw)
+                is JSONObject -> {
+                    raw.optString("type").takeIf(String::isNotBlank)?.let(::add)
+                    appendHistoryTypes(raw.opt("typeCounts"))
+                    appendHistoryTypes(raw.opt("types"))
+                }
+            }
+        }
+        return if (MetricTypePolicy.isNumericHistory(types)) MetricKind.NUMBER else MetricKind.UNKNOWN
+    }
+
+    private fun MutableList<String>.appendHistoryTypes(raw: Any?) {
+        when (raw) {
+            is String -> add(raw)
+            is JSONObject -> {
+                val directType = raw.optString("type")
+                if (directType.isNotBlank()) {
+                    add(directType)
+                } else {
+                    raw.keys().forEach { key ->
+                        if (raw.opt(key) is Number && raw.optDouble(key, 0.0) > 0.0) add(key)
+                    }
+                }
+            }
+            is JSONArray -> for (index in 0 until raw.length()) appendHistoryTypes(raw.opt(index))
+        }
     }
 
     private fun valueKind(raw: Any?): MetricKind = when (raw) {
@@ -263,7 +284,7 @@ class WandbApi(
         private const val VIEWER_QUERY = """query Viewer { viewer { entity username teams { edges { node { name } } } } }"""
         private const val PROJECTS_QUERY = """query GetProjects(${'$'}entity: String, ${'$'}cursor: String, ${'$'}perPage: Int = 20) { models(entityName: ${'$'}entity, after: ${'$'}cursor, first: ${'$'}perPage) { pageInfo { endCursor hasNextPage } edges { node { id name entityName createdAt isBenchmark } } } }"""
         private const val RUNS_QUERY = """query Runs(${'$'}project: String!, ${'$'}entity: String!, ${'$'}cursor: String, ${'$'}perPage: Int = 20, ${'$'}order: String) { project(name: ${'$'}project, entityName: ${'$'}entity) { runCount runs(after: ${'$'}cursor, first: ${'$'}perPage, order: ${'$'}order) { edges { node { id tags name displayName state group jobType createdAt heartbeatAt description notes historyLineCount } } pageInfo { endCursor hasNextPage } } } }"""
-        private const val RUN_DETAILS_QUERY = """query RunDetails(${'$'}project: String!, ${'$'}entity: String!, ${'$'}name: String!) { project(name: ${'$'}project, entityName: ${'$'}entity) { run(name: ${'$'}name) { id tags name displayName state group jobType createdAt heartbeatAt description notes historyLineCount config summaryMetrics systemMetrics historyKeys } } }"""
+        private const val RUN_DETAILS_QUERY = """query RunDetails(${'$'}project: String!, ${'$'}entity: String!, ${'$'}name: String!) { project(name: ${'$'}project, entityName: ${'$'}entity) { run(name: ${'$'}name) { id tags name displayName state group jobType createdAt heartbeatAt description notes historyLineCount config systemMetrics historyKeys } } }"""
         private const val SAMPLED_HISTORY_QUERY = """query RunSampledHistory(${'$'}project: String!, ${'$'}entity: String!, ${'$'}name: String!, ${'$'}specs: [JSONString!]!) { project(name: ${'$'}project, entityName: ${'$'}entity) { run(name: ${'$'}name) { sampledHistory(specs: ${'$'}specs) } } }"""
         private const val SYSTEM_HISTORY_QUERY = """query RunSystemHistory(${'$'}project: String!, ${'$'}entity: String!, ${'$'}name: String!, ${'$'}samples: Int) { project(name: ${'$'}project, entityName: ${'$'}entity) { run(name: ${'$'}name) { events(samples: ${'$'}samples) } } }"""
     }

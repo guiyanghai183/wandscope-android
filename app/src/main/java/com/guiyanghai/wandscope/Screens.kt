@@ -58,7 +58,7 @@ fun WandScopeRoot(state: AppUiState, viewModel: AppViewModel) {
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
         when {
             state.starting -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = WandColors.Accent) }
-            !state.loggedIn -> LoginScreen(state, viewModel::login)
+            !state.loggedIn -> LoginScreen(state, viewModel::login, viewModel::retrySavedLogin, viewModel::forgetApiKey)
             else -> when (state.screen) {
                 Screen.Projects -> ProjectsScreen(state, viewModel)
                 is Screen.ProjectOverview -> ProjectOverviewScreen(state, viewModel)
@@ -80,7 +80,12 @@ fun WandScopeRoot(state: AppUiState, viewModel: AppViewModel) {
 }
 
 @Composable
-private fun LoginScreen(state: AppUiState, onLogin: (String) -> Unit) {
+private fun LoginScreen(
+    state: AppUiState,
+    onLogin: (String) -> Unit,
+    onRetrySaved: () -> Unit,
+    onForgetSaved: () -> Unit,
+) {
     var key by remember { mutableStateOf("") }
     Column(
         Modifier.fillMaxSize().imePadding().padding(horizontal = 26.dp, vertical = 28.dp),
@@ -110,6 +115,14 @@ private fun LoginScreen(state: AppUiState, onLogin: (String) -> Unit) {
                     key = ""
                     onLogin(submitted)
                 }
+                if (state.hasSavedApiKey) {
+                    TextButton(onClick = onRetrySaved, enabled = !state.loading, modifier = Modifier.fillMaxWidth()) {
+                        Text("使用已保存的 API Key 连接")
+                    }
+                    TextButton(onClick = onForgetSaved, enabled = !state.loading, modifier = Modifier.fillMaxWidth()) {
+                        Text("删除已保存的 API Key", color = MaterialTheme.colorScheme.error)
+                    }
+                }
                 if (state.loading) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator(Modifier.size(22.dp), color = WandColors.Accent, strokeWidth = 2.dp) }
                 if (state.error.isNotBlank()) Text(state.error, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
             }
@@ -126,7 +139,7 @@ private fun ProjectsScreen(state: AppUiState, viewModel: AppViewModel) {
             subtitle = state.viewer?.username.orEmpty(),
             action = {
                 IconButton(onClick = { viewModel.checkForUpdate() }) { Icon(Icons.Rounded.CloudSync, "检查更新") }
-                IconButton(onClick = viewModel::logout) { Icon(Icons.AutoMirrored.Rounded.Logout, "退出") }
+                IconButton(onClick = viewModel::logout) { Icon(Icons.AutoMirrored.Rounded.Logout, "断开当前会话") }
             },
         )
         val entities = state.viewer?.entities.orEmpty()
@@ -292,7 +305,7 @@ private fun RunDetailScreen(state: AppUiState, viewModel: AppViewModel) {
                     }
                 }
             }
-            item { SegmentedControl(listOf("Curves", "Summary", "Config"), tab) { tab = it } }
+            item { SegmentedControl(listOf("Curves", "Config"), tab) { tab = it } }
             if (state.loading && details == null) item { LoadingCard("正在加载 Run 详情") }
             else if (state.error.isNotBlank() && details == null) item { ErrorCard("无法加载 Run 详情", state.error) { viewModel.openRun(run) } }
             else when (tab) {
@@ -312,15 +325,6 @@ private fun RunDetailScreen(state: AppUiState, viewModel: AppViewModel) {
                         }
                     }
                     if (state.rejectedCurveCount > 0) item { InfoCard("${state.rejectedCurveCount} 个指标没有足够的数值历史，无法绘制。") }
-                }
-                1 -> {
-                    item { SectionLabel("SUMMARY") }
-                    if (details?.summary.isNullOrEmpty()) item { EmptyCard("暂无 Summary", "") }
-                    else item { KeyValueCard(requireNotNull(details).summary) }
-                    if (!details?.system.isNullOrEmpty()) {
-                        item { SectionLabel("SYSTEM") }
-                        item { KeyValueCard(requireNotNull(details).system) }
-                    }
                 }
                 else -> {
                     item { SectionLabel("CONFIG") }

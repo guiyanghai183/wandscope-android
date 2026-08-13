@@ -17,10 +17,10 @@ class SecretStore(context: Context) {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey())
         val encrypted = cipher.doFinal(value.trim().toByteArray(Charsets.UTF_8))
-        prefs.edit()
+        check(prefs.edit()
             .putString("ciphertext", Base64.encodeToString(encrypted, Base64.NO_WRAP))
             .putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-            .apply()
+            .commit()) { "无法在本机安全保存 API Key" }
     }
 
     fun readApiKey(): String? {

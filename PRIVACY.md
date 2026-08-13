@@ -8,7 +8,7 @@ WandScope 是一个只读的第三方 W&B 客户端，不隶属于 Weights & Bia
 - 最近选择的 Entity 与曲线指标。
 - 最多 8 个曾打开 Project 的 `entity/project` 标识，用于 Run 完成检查。
 - 最近 Run 的 ID、状态，以及已通知的 Run ID，用于首次静默基线和通知去重。
-- 上述普通偏好不会包含 API Key、曲线采样点、Summary、Config 或完整 W&B 响应。
+- 上述普通偏好不会包含 API Key、曲线采样点、Config 或完整 W&B 响应。
 
 ## 网络访问
 
@@ -24,4 +24,5 @@ WandScope 是一个只读的第三方 W&B 客户端，不隶属于 Weights & Bia
 ## 备份与退出
 
 - 应用禁用云备份和设备迁移备份，避免 API Key 与监控状态离开当前设备。
-- 退出登录会删除加密 API Key、Android Keystore 密钥、偏好、监控状态，并取消后台任务。
+- 断开当前会话只会取消当前网络会话和后台任务，不会删除已加密保存的 API Key；下次打开应用时可以自动连接。
+- 登录页提供“删除已保存的 API Key”操作；只有明确使用该操作时，应用才会删除密文、Android Keystore 密钥、普通偏好和监控状态。
