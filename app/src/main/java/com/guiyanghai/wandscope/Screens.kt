@@ -244,7 +244,14 @@ private fun ProjectOverviewScreen(state: AppUiState, viewModel: AppViewModel) {
                 }
             } else if (!state.loadingCurves) {
                 state.projectMetrics.filter { it.id in state.projectSelection }.forEach { metric ->
-                    item(metric.id) { MetricChart(metric.key, "多 Run 对比", state.projectCurves.filter { it.metricKey == metric.key }) }
+                    item(metric.id) {
+                        MetricChart(
+                            metric.key,
+                            "多 Run 对比",
+                            state.projectCurves.filter { it.metricKey == metric.key },
+                            onRemove = { viewModel.removeProjectCurve(metric.id) },
+                        )
+                    }
                 }
             }
             if (state.rejectedCurveCount > 0) item { InfoCard("${state.rejectedCurveCount} 条曲线没有足够的数值历史，暂时无法绘制。") }
@@ -321,7 +328,14 @@ private fun RunDetailScreen(state: AppUiState, viewModel: AppViewModel) {
                         item { EmptyCard(if (details?.metrics.isNullOrEmpty()) "暂无可绘制曲线" else "选择要关注的曲线", if (details?.metrics.isNullOrEmpty()) "这个 Run 没有数值历史指标。" else "点击“选择曲线”，最多显示 8 个指标。") }
                     } else if (!state.loadingCurves) {
                         details?.metrics.orEmpty().filter { it.id in state.runSelection }.forEach { metric ->
-                            item(metric.id) { MetricChart(metric.key, run.displayName, state.runCurves.filter { it.metricKey == metric.key }) }
+                            item(metric.id) {
+                                MetricChart(
+                                    metric.key,
+                                    run.displayName,
+                                    state.runCurves.filter { it.metricKey == metric.key },
+                                    onRemove = { viewModel.removeRunCurve(metric.id) },
+                                )
+                            }
                         }
                     }
                     if (state.rejectedCurveCount > 0) item { InfoCard("${state.rejectedCurveCount} 个指标没有足够的数值历史，无法绘制。") }

@@ -10,6 +10,7 @@ val releaseStorePath = System.getenv("ANDROID_KEYSTORE_PATH")
 val releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
 val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
 val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+val useDebugSigning = providers.gradleProperty("useDebugSigning").orNull.toBoolean()
 
 android {
     namespace = "com.guiyanghai.wandscope"
@@ -19,8 +20,8 @@ android {
         applicationId = "com.guiyanghai.wandscope"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "GITHUB_REPOSITORY", "\"guiyanghai183/wandscope-android\"")
     }
@@ -43,7 +44,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = releaseSigning
+            signingConfig = releaseSigning ?: if (useDebugSigning) signingConfigs.getByName("debug") else null
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

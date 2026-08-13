@@ -10,15 +10,17 @@
 8. 从 GitHub 下载回所有资产，重新核对哈希、签名证书与包名。
 9. 在至少一台 Android 真机上验证全新安装和从上一版本覆盖升级。
 
+当前 GitHub 个人测试 Release 必须与此前本地 Debug APK 使用同一证书，可在构建时显式传入 `-PuseDebugSigning=true`。该参数只复用本机 Android Debug keystore，不会把私钥或密码写进仓库；发布前必须核对证书 SHA-256 连续。未来迁移到正式 Release keystore 后，旧 Debug 签名安装无法直接覆盖升级。
+
 `update.json` 示例：
 
 ```json
 {
-  "versionCode": 2,
-  "versionName": "1.0.1",
-  "apkUrl": "https://github.com/guiyanghai183/wandscope-android/releases/download/v1.0.1/WandScope-1.0.1.apk",
+  "versionCode": 3,
+  "versionName": "1.0.2",
+  "apkUrl": "https://github.com/guiyanghai183/wandscope-android/releases/download/v1.0.2/WandScope-1.0.2.apk",
   "sha256": "<64位小写SHA-256>",
-  "releaseUrl": "https://github.com/guiyanghai183/wandscope-android/releases/tag/v1.0.1"
+  "releaseUrl": "https://github.com/guiyanghai183/wandscope-android/releases/tag/v1.0.2"
 }
 ```
 

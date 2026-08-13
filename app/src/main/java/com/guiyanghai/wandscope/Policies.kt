@@ -64,6 +64,8 @@ object MetricSelectionPolicy {
         val allowed = selectable(metrics).map(MetricDefinition::id).toSet()
         return ids.filter { it in allowed }.distinct().take(limit)
     }
+
+    fun remove(ids: List<String>, id: String): List<String> = ids.filterNot { it == id }
 }
 
 object MetricSearchPolicy {

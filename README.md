@@ -9,6 +9,7 @@ WandScope 是一个只读的原生 Android W&B 客户端，采用 Jetpack Compos
 - 两层曲线选择器：根据当前 Run 实际记录的命名空间动态显示 `System`、`Charts`、`Train`、`Validation` 等分类；进入分类后可实时搜索具体指标。
 - 只显示由 W&B 明确标记为数值类型的 history/system 指标，不显示最新值。
 - Project 页面最多对比最近 5 个 Run，最多选择 8 个指标；Run 页面显示单 Run 曲线、完整首尾范围以及横纵双轴刻度。
+- 已显示的曲线卡片可向右滑动移除；该操作只取消本地显示和选择，不会删除 W&B 指标或 Run。
 - 首次读取只建立 Run 状态基线；此后 Run 进入 `finished`/`completed` 时通知。
 - 前台当前 Project 每 60 秒刷新；后台由 WorkManager 最快约 15 分钟、由 Android 系统择机执行。
 - 支持 GitHub Release `update.json` 检查、HTTPS 域名约束、APK SHA-256 校验和系统安装器确认。
@@ -23,7 +24,7 @@ $env:JAVA_HOME='C:\Path\To\JDK17'
 .\gradlew.bat test lint assembleDebug assembleRelease
 ```
 
-Release 默认不签名。正式发布时请从环境变量或私有 Gradle 配置接入独立 Android keystore，绝不要提交私钥或密码。
+Release 默认不签名。正式发布时请从环境变量或私有 Gradle 配置接入独立 Android keystore，绝不要提交私钥或密码。为了与当前本地测试安装保持签名连续，可显式使用 `-PuseDebugSigning=true` 生成由本机 Debug 证书签名的个人测试 Release；该模式不适合应用商店发布。
 
 ## 更新清单
 
@@ -35,11 +36,11 @@ Release 默认不签名。正式发布时请从环境变量或私有 Gradle 配�
 
 ```json
 {
-  "versionCode": 2,
-  "versionName": "1.0.1",
-  "apkUrl": "https://github.com/guiyanghai183/wandscope-android/releases/download/v1.0.1/WandScope-1.0.1.apk",
+  "versionCode": 3,
+  "versionName": "1.0.2",
+  "apkUrl": "https://github.com/guiyanghai183/wandscope-android/releases/download/v1.0.2/WandScope-1.0.2.apk",
   "sha256": "64位小写SHA-256",
-  "releaseUrl": "https://github.com/guiyanghai183/wandscope-android/releases/tag/v1.0.1"
+  "releaseUrl": "https://github.com/guiyanghai183/wandscope-android/releases/tag/v1.0.2"
 }
 ```
 

@@ -296,6 +296,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         loadRunCurves()
     }
 
+    fun removeProjectCurve(id: String) {
+        val selected = _state.value.projectSelection
+        if (id !in selected) return
+        selectProjectCurves(MetricSelectionPolicy.remove(selected, id))
+    }
+
+    fun removeRunCurve(id: String) {
+        val selected = _state.value.runSelection
+        if (id !in selected) return
+        selectRunCurves(MetricSelectionPolicy.remove(selected, id))
+    }
+
     private fun loadProjectCurves() {
         val activeApi = api ?: return
         val snapshot = _state.value

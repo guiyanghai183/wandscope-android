@@ -27,6 +27,7 @@ import androidx.compose.material.icons.rounded.ArrowBackIosNew
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -37,11 +38,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -179,8 +184,45 @@ fun EmptyCard(title: String, message: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MetricChart(title: String, subtitle: String, series: List<ChartSeries>) {
+fun MetricChart(
+    title: String,
+    subtitle: String,
+    series: List<ChartSeries>,
+    onRemove: (() -> Unit)? = null,
+) {
+    if (onRemove == null) {
+        MetricChartCard(title, subtitle, series)
+        return
+    }
+    val currentOnRemove by rememberUpdatedState(onRemove)
+    val dismissState = rememberSwipeToDismissBoxState()
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)),
+        backgroundContent = {
+            Row(
+                Modifier.fillMaxSize().background(WandColors.Red).padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = Color.White)
+                Text("移除曲线", color = Color.White, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = false,
+        onDismiss = { direction ->
+            if (direction == SwipeToDismissBoxValue.StartToEnd) currentOnRemove()
+        },
+    ) {
+        MetricChartCard(title, subtitle, series)
+    }
+}
+
+@Composable
+private fun MetricChartCard(title: String, subtitle: String, series: List<ChartSeries>) {
     val bounds = remember(series) { chartBounds(series) }
     SurfaceCard(Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

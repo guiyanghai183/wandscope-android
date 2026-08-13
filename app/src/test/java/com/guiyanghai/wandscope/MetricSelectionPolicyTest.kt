@@ -56,6 +56,17 @@ class MetricSelectionPolicyTest {
         assertEquals((1..8).map { "history:$it" }, MetricSelectionPolicy.normalize(input, metrics))
     }
 
+    @Test
+    fun `swiping a chart removes only that metric selection`() {
+        val selected = listOf("history:loss", "history:accuracy", "system:cpu")
+
+        assertEquals(
+            listOf("history:loss", "system:cpu"),
+            MetricSelectionPolicy.remove(selected, "history:accuracy"),
+        )
+        assertEquals(selected, MetricSelectionPolicy.remove(selected, "missing"))
+    }
+
     private fun metric(id: String, source: MetricSource, kind: MetricKind, plottable: Boolean) =
         MetricDefinition(id, id.substringAfter(':'), source, kind, "Charts", plottable)
 }
