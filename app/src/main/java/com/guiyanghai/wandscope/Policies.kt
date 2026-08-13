@@ -66,6 +66,19 @@ object MetricSelectionPolicy {
     }
 }
 
+object MetricSearchPolicy {
+    fun filter(metrics: List<MetricDefinition>, query: String): List<MetricDefinition> {
+        val normalized = query.trim().lowercase(Locale.US)
+        if (normalized.isEmpty()) return metrics
+        return metrics.filter { metric ->
+            metric.key.lowercase(Locale.US).contains(normalized) ||
+                MetricGroupingPolicy.displayName(metric.key, metric.group)
+                    .lowercase(Locale.US)
+                    .contains(normalized)
+        }
+    }
+}
+
 object ReleaseUrlPolicy {
     private val trustedHosts = setOf(
         "github.com",

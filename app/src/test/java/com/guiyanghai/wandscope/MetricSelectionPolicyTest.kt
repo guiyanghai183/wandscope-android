@@ -24,6 +24,18 @@ class MetricSelectionPolicyTest {
     }
 
     @Test
+    fun `metric search filters inside a category using full and display names`() {
+        val metrics = listOf(
+            MetricDefinition("1", "train/loss", MetricSource.HISTORY, MetricKind.NUMBER, "Train", true),
+            MetricDefinition("2", "train/accuracy", MetricSource.HISTORY, MetricKind.NUMBER, "Train", true),
+        )
+
+        assertEquals(listOf("1"), MetricSearchPolicy.filter(metrics, "LOSS").map { it.id })
+        assertEquals(listOf("2"), MetricSearchPolicy.filter(metrics, "train/acc").map { it.id })
+        assertEquals(listOf("1", "2"), MetricSearchPolicy.filter(metrics, "  ").map { it.id })
+    }
+
+    @Test
     fun `only explicit numeric history and system metrics are selectable`() {
         val metrics = listOf(
             metric("history:number", MetricSource.HISTORY, MetricKind.NUMBER, true),

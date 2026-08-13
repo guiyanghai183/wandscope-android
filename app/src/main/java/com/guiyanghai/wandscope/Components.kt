@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,6 +61,16 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+private val ChartYAxisWidth = 54.dp
+private val ChartPlotHeight = 180.dp
+
+private data class ChartBounds(
+    val minX: Double,
+    val maxX: Double,
+    val minY: Double,
+    val maxY: Double,
+)
 
 @Composable
 fun BrandMark(modifier: Modifier = Modifier, size: Int = 58) {
@@ -166,19 +181,19 @@ fun EmptyCard(title: String, message: String) {
 
 @Composable
 fun MetricChart(title: String, subtitle: String, series: List<ChartSeries>) {
+    val bounds = remember(series) { chartBounds(series) }
     SurfaceCard(Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column {
                 Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(subtitle, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (series.all { it.points.isEmpty() }) {
+            if (bounds == null) {
                 Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
                     Text("暂无可绘制数据", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                 }
             } else {
-                ChartCanvas(series, Modifier.fillMaxWidth().height(168.dp))
-                HorizontalAxis(series)
+                ChartPlot(series, bounds)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     series.take(6).forEachIndexed { index, item ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -194,32 +209,56 @@ fun MetricChart(title: String, subtitle: String, series: List<ChartSeries>) {
 }
 
 @Composable
-private fun ChartCanvas(series: List<ChartSeries>, modifier: Modifier) {
+private fun ChartPlot(series: List<ChartSeries>, bounds: ChartBounds) {
+    val source = series.firstOrNull()?.source ?: MetricSource.HISTORY
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().height(ChartPlotHeight)) {
+            VerticalAxis(bounds, Modifier.width(ChartYAxisWidth).fillMaxHeight())
+            ChartCanvas(series, bounds, Modifier.weight(1f).fillMaxHeight())
+        }
+        HorizontalAxis(bounds, source, Modifier.fillMaxWidth().padding(start = ChartYAxisWidth))
+    }
+}
+
+@Composable
+private fun VerticalAxis(bounds: ChartBounds, modifier: Modifier = Modifier) {
+    Box(modifier.padding(end = 7.dp, top = 4.dp, bottom = 4.dp)) {
+        val color = MaterialTheme.colorScheme.onSurfaceVariant
+        Text(compactNumber(bounds.maxY), Modifier.align(Alignment.TopEnd), fontSize = 9.sp, color = color, maxLines = 1)
+        Text(compactNumber((bounds.minY + bounds.maxY) / 2.0), Modifier.align(Alignment.CenterEnd), fontSize = 9.sp, color = color, maxLines = 1)
+        Text(compactNumber(bounds.minY), Modifier.align(Alignment.BottomEnd), fontSize = 9.sp, color = color, maxLines = 1)
+    }
+}
+
+@Composable
+private fun ChartCanvas(series: List<ChartSeries>, bounds: ChartBounds, modifier: Modifier) {
     val grid = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
     val axis = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
     Canvas(modifier) {
-        val all = series.flatMap { it.points }.filter { it.x.isFinite() && it.y.isFinite() }
-        if (all.isEmpty()) return@Canvas
-        var minX = all.minOf { it.x }; var maxX = all.maxOf { it.x }
-        var minY = all.minOf { it.y }; var maxY = all.maxOf { it.y }
-        if (abs(maxX - minX) < 1e-12) { minX -= 1.0; maxX += 1.0 }
-        if (abs(maxY - minY) < 1e-12) { minY -= 1.0; maxY += 1.0 }
+        val inset = 5.dp.toPx()
+        val left = inset
+        val right = (size.width - inset).coerceAtLeast(left + 1f)
+        val top = inset
+        val bottom = (size.height - inset).coerceAtLeast(top + 1f)
+        val plotWidth = right - left
+        val plotHeight = bottom - top
         repeat(5) { i ->
-            val y = size.height * i / 4f
-            drawLine(grid, Offset(0f, y), Offset(size.width, y), 1f)
+            val y = top + plotHeight * i / 4f
+            drawLine(grid, Offset(left, y), Offset(right, y), 1f)
         }
         repeat(3) { i ->
-            val x = size.width * i / 2f
-            drawLine(grid, Offset(x, 0f), Offset(x, size.height), 1f)
+            val x = left + plotWidth * i / 2f
+            drawLine(grid, Offset(x, top), Offset(x, bottom), 1f)
         }
-        drawLine(axis, Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f), 1.5.dp.toPx())
+        drawLine(axis, Offset(left, bottom), Offset(right, bottom), 1.5.dp.toPx())
+        drawLine(axis, Offset(left, top), Offset(left, bottom), 1.5.dp.toPx())
         series.forEachIndexed { index, item ->
             val points = item.points.filter { it.x.isFinite() && it.y.isFinite() }
             if (points.isEmpty()) return@forEachIndexed
             val path = Path()
             points.forEachIndexed { pointIndex, point ->
-                val x = ((point.x - minX) / (maxX - minX) * size.width).toFloat()
-                val y = (size.height - (point.y - minY) / (maxY - minY) * size.height).toFloat()
+                val x = (left + (point.x - bounds.minX) / (bounds.maxX - bounds.minX) * plotWidth).toFloat()
+                val y = (bottom - (point.y - bounds.minY) / (bounds.maxY - bounds.minY) * plotHeight).toFloat()
                 if (pointIndex == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
             val color = WandColors.ChartPalette[index % WandColors.ChartPalette.size]
@@ -230,14 +269,9 @@ private fun ChartCanvas(series: List<ChartSeries>, modifier: Modifier) {
 }
 
 @Composable
-private fun HorizontalAxis(series: List<ChartSeries>) {
-    val points = series.flatMap { it.points }.filter { it.x.isFinite() }
-    if (points.isEmpty()) return
-    val min = points.minOf { it.x }
-    val max = points.maxOf { it.x }
-    val middle = (min + max) / 2.0
-    val source = series.firstOrNull()?.source ?: MetricSource.HISTORY
-    Column(Modifier.fillMaxWidth()) {
+private fun HorizontalAxis(bounds: ChartBounds, source: MetricSource, modifier: Modifier = Modifier) {
+    val middle = (bounds.minX + bounds.maxX) / 2.0
+    Column(modifier.padding(horizontal = 5.dp)) {
         Canvas(Modifier.fillMaxWidth().height(7.dp)) {
             val color = androidx.compose.ui.graphics.Color.Gray.copy(alpha = 0.75f)
             drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx())
@@ -247,9 +281,9 @@ private fun HorizontalAxis(series: List<ChartSeries>) {
             }
         }
         Row(Modifier.fillMaxWidth()) {
-            Text(formatAxisValue(min, source), Modifier.weight(1f), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(formatAxisValue(bounds.minX, source), Modifier.weight(1f), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(formatAxisValue(middle, source), Modifier.weight(1f), fontSize = 10.sp, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(formatAxisValue(max, source), Modifier.weight(1f), fontSize = 10.sp, textAlign = TextAlign.End, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(formatAxisValue(bounds.maxX, source), Modifier.weight(1f), fontSize = 10.sp, textAlign = TextAlign.End, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text(
             if (source == MetricSource.SYSTEM) "时间" else "Step",
@@ -259,6 +293,25 @@ private fun HorizontalAxis(series: List<ChartSeries>) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+private fun chartBounds(series: List<ChartSeries>): ChartBounds? {
+    val points = series.flatMap { it.points }.filter { it.x.isFinite() && it.y.isFinite() }
+    if (points.isEmpty()) return null
+    var minX = points.minOf { it.x }
+    var maxX = points.maxOf { it.x }
+    var minY = points.minOf { it.y }
+    var maxY = points.maxOf { it.y }
+    if (abs(maxX - minX) < 1e-12) {
+        minX -= 1.0
+        maxX += 1.0
+    }
+    if (abs(maxY - minY) < 1e-12) {
+        val padding = maxOf(abs(minY) * 0.05, 1.0)
+        minY -= padding
+        maxY += padding
+    }
+    return ChartBounds(minX, maxX, minY, maxY)
 }
 
 private fun formatAxisValue(value: Double, source: MetricSource): String {
@@ -294,7 +347,7 @@ fun MetricPickerSheet(
     val groups = remember(selectable) { selectable.groupBy { it.group.ifBlank { "Charts" } } }
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.background) {
-        Column(Modifier.fillMaxWidth().height(560.dp)) {
+        Column(Modifier.fillMaxWidth().height(620.dp).imePadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (category != null) {
                     IconButton(onClick = { category = null }) { Icon(Icons.Rounded.ArrowBackIosNew, "返回") }
@@ -323,9 +376,35 @@ fun MetricPickerSheet(
                     }
                 }
             } else {
-                val items = groups[category].orEmpty()
-                LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    items(items, key = MetricDefinition::id) { metric ->
+                var query by remember(category) { mutableStateOf("") }
+                val categoryMetrics = groups[category].orEmpty()
+                val filteredMetrics = remember(categoryMetrics, query) { MetricSearchPolicy.filter(categoryMetrics, query) }
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    placeholder = { Text("搜索 ${category.orEmpty()} 指标") },
+                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "清除搜索") }
+                        }
+                    },
+                )
+                LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    if (filteredMetrics.isEmpty()) {
+                        item {
+                            Text(
+                                "没有匹配的指标",
+                                Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    items(filteredMetrics, key = MetricDefinition::id) { metric ->
                         val checked = metric.id in selected
                         Row(
                             Modifier.fillMaxWidth().clickable {

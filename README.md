@@ -6,9 +6,9 @@ WandScope 是一个只读的原生 Android W&B 客户端，采用 Jetpack Compos
 
 - API Key 在连接时立即使用 Android Keystore 加密并保存在设备本地；关闭应用或断开当前会话后可以自动恢复，不需要重复输入。
 - 浏览 Entity、Projects、Runs、Run Config 和曲线数据。
-- 两层曲线选择器：根据当前 Run 实际记录的命名空间动态显示 `System`、`Charts`、`Train`、`Validation` 等分类，再选择具体指标。
+- 两层曲线选择器：根据当前 Run 实际记录的命名空间动态显示 `System`、`Charts`、`Train`、`Validation` 等分类；进入分类后可实时搜索具体指标。
 - 只显示由 W&B 明确标记为数值类型的 history/system 指标，不显示最新值。
-- Project 页面最多对比最近 5 个 Run，最多选择 8 个指标；Run 页面显示单 Run 曲线和带刻度的横轴。
+- Project 页面最多对比最近 5 个 Run，最多选择 8 个指标；Run 页面显示单 Run 曲线、完整首尾范围以及横纵双轴刻度。
 - 首次读取只建立 Run 状态基线；此后 Run 进入 `finished`/`completed` 时通知。
 - 前台当前 Project 每 60 秒刷新；后台由 WorkManager 最快约 15 分钟、由 Android 系统择机执行。
 - 支持 GitHub Release `update.json` 检查、HTTPS 域名约束、APK SHA-256 校验和系统安装器确认。
