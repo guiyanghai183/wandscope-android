@@ -40,6 +40,8 @@ data class AppUiState(
     val rejectedCurveCount: Int = 0,
     val updateInfo: UpdateInfo? = null,
     val checkingUpdate: Boolean = false,
+    val downloadingUpdate: Boolean = false,
+    val updateDownloadProgress: Int? = null,
     val updateMessage: String = "",
 )
 
@@ -402,14 +404,38 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun dismissUpdate() = _state.update { it.copy(updateInfo = null) }
+    fun dismissUpdate() = _state.update {
+        if (it.downloadingUpdate) it else it.copy(updateInfo = null)
+    }
 
     fun installUpdate(info: UpdateInfo) {
-        _state.update { it.copy(updateMessage = "正在下载并校验更新…") }
+        if (_state.value.downloadingUpdate) return
+        _state.update { it.copy(downloadingUpdate = true, updateDownloadProgress = 0, updateMessage = "") }
         viewModelScope.launch {
-            runCatching { ReleaseUpdateService(getApplication()).downloadAndOpen(info) }
-                .onSuccess { _state.update { it.copy(updateMessage = "已交给系统安装器", updateInfo = null) } }
-                .onFailure { error -> _state.update { it.copy(updateMessage = safeMessage(error)) } }
+            runCatching {
+                ReleaseUpdateService(getApplication()).downloadAndOpen(info) { progress ->
+                    _state.update { it.copy(updateDownloadProgress = progress) }
+                }
+            }
+                .onSuccess {
+                    _state.update {
+                        it.copy(
+                            downloadingUpdate = false,
+                            updateDownloadProgress = null,
+                            updateMessage = "已交给系统安装器",
+                            updateInfo = null,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            downloadingUpdate = false,
+                            updateDownloadProgress = null,
+                            updateMessage = safeMessage(error),
+                        )
+                    }
+                }
         }
     }
 

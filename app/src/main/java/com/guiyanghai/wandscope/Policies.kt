@@ -81,6 +81,18 @@ object MetricSearchPolicy {
     }
 }
 
+object CurveDismissPolicy {
+    fun shouldDismiss(offsetPx: Float, thresholdPx: Float): Boolean =
+        thresholdPx > 0f && offsetPx >= thresholdPx
+}
+
+object UpdateProgressPolicy {
+    fun percentage(bytesRead: Long, totalBytes: Long): Int? {
+        if (totalBytes <= 0L) return null
+        return ((bytesRead.coerceIn(0L, totalBytes) * 90L) / totalBytes).toInt()
+    }
+}
+
 object ReleaseUrlPolicy {
     private val trustedHosts = setOf(
         "github.com",

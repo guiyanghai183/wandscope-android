@@ -9,10 +9,11 @@ WandScope 是一个只读的原生 Android W&B 客户端，采用 Jetpack Compos
 - 两层曲线选择器：根据当前 Run 实际记录的命名空间动态显示 `System`、`Charts`、`Train`、`Validation` 等分类；进入分类后可实时搜索具体指标。
 - 只显示由 W&B 明确标记为数值类型的 history/system 指标，不显示最新值。
 - Project 页面最多对比最近 5 个 Run，最多选择 8 个指标；Run 页面显示单 Run 曲线、完整首尾范围以及横纵双轴刻度。
-- 已显示的曲线卡片可向右滑动移除；该操作只取消本地显示和选择，不会删除 W&B 指标或 Run。
+- 已显示的曲线卡片可向右拖动，拖动时实时露出红色“移除曲线”；超过约 28% 宽度后松手才移除，未达到阈值会回弹。该操作只取消本地显示和选择，不会删除 W&B 指标或 Run。
 - 首次读取只建立 Run 状态基线；此后 Run 进入 `finished`/`completed` 时通知。
 - 前台当前 Project 每 60 秒刷新；后台由 WorkManager 最快约 15 分钟、由 Android 系统择机执行。
 - 支持 GitHub Release `update.json` 检查、HTTPS 域名约束、APK SHA-256 校验和系统安装器确认。
+- 更新对话框在下载 APK 时显示实时进度条和百分比，并分别提示下载、SHA-256 校验和打开系统安装器阶段。
 - 仓库尚未发布 Release 或缺少 `update.json` 时，更新检查会显示“当前没有可用的在线更新”，不会把 GitHub 404 显示为服务器故障。
 
 ## 构建
@@ -36,11 +37,11 @@ Release 默认不签名。正式发布时请从环境变量或私有 Gradle 配�
 
 ```json
 {
-  "versionCode": 3,
-  "versionName": "1.0.2",
-  "apkUrl": "https://github.com/guiyanghai183/wandscope-android/releases/download/v1.0.2/WandScope-1.0.2.apk",
+  "versionCode": 4,
+  "versionName": "1.0.3",
+  "apkUrl": "https://github.com/guiyanghai183/wandscope-android/releases/download/v1.0.3/WandScope-1.0.3.apk",
   "sha256": "64位小写SHA-256",
-  "releaseUrl": "https://github.com/guiyanghai183/wandscope-android/releases/tag/v1.0.2"
+  "releaseUrl": "https://github.com/guiyanghai183/wandscope-android/releases/tag/v1.0.3"
 }
 ```
 

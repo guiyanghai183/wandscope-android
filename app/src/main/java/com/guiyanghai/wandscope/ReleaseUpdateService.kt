@@ -13,6 +13,7 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -46,12 +47,27 @@ class ReleaseUpdateService(private val context: Context) {
         }
     }
 
-    suspend fun downloadAndOpen(info: UpdateInfo) = withContext(Dispatchers.IO) {
-        val bytes = fetch(info.apkUrl, 100 * 1024 * 1024)
-        val actual = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        if (!actual.equals(info.sha256, ignoreCase = true)) throw IOException("更新包 SHA-256 校验失败")
+    suspend fun downloadAndOpen(info: UpdateInfo, onProgress: (Int?) -> Unit) = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
-        val apk = File(dir, "WandScope-${info.versionName}.apk").apply { writeBytes(bytes) }
+        val apk = File(dir, "WandScope-${info.versionName}.apk")
+        runCatching {
+            downloadToFile(info.apkUrl, apk, 100 * 1024 * 1024, onProgress)
+            onProgress(92)
+            val actual = apk.inputStream().use { input ->
+                val digest = MessageDigest.getInstance("SHA-256")
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+                digest.digest().joinToString("") { "%02x".format(it) }
+            }
+            if (!actual.equals(info.sha256, ignoreCase = true)) throw IOException("更新包 SHA-256 校验失败")
+            onProgress(100)
+        }.onFailure {
+            apk.delete()
+        }.getOrThrow()
         if (Build.VERSION.SDK_INT >= 26 && !context.packageManager.canRequestPackageInstalls()) {
             context.startActivity(
                 Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
@@ -65,6 +81,49 @@ class ReleaseUpdateService(private val context: Context) {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)
+    }
+
+    private fun downloadToFile(initial: String, target: File, limit: Int, onProgress: (Int?) -> Unit) {
+        var current = initial
+        repeat(6) {
+            ReleaseUrlPolicy.requireAllowed(current, BuildConfig.GITHUB_REPOSITORY)
+            client.newCall(Request.Builder().url(current).header("Accept", "application/octet-stream").build()).execute().use { response ->
+                if (response.code in 300..399) {
+                    current = response.header("Location") ?: throw IOException("更新地址重定向缺少 Location")
+                    return@repeat
+                }
+                if (!response.isSuccessful) throw IOException("更新服务器返回 HTTP ${response.code}")
+                val body = response.body ?: throw IOException("更新响应为空")
+                val total = body.contentLength()
+                if (total > limit) throw IOException("更新文件超过大小限制")
+                var lastReported = Int.MIN_VALUE
+                fun reportProgress(bytesRead: Long) {
+                    val progress = UpdateProgressPolicy.percentage(bytesRead, total)
+                    val marker = progress ?: -1
+                    if (marker != lastReported) {
+                        lastReported = marker
+                        onProgress(progress)
+                    }
+                }
+                reportProgress(0L)
+                var received = 0L
+                body.byteStream().use { input ->
+                    FileOutputStream(target, false).use { output ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            received += count
+                            if (received > limit) throw IOException("更新文件超过大小限制")
+                            output.write(buffer, 0, count)
+                            reportProgress(received)
+                        }
+                    }
+                }
+                return
+            }
+        }
+        throw IOException("更新地址重定向次数过多")
     }
 
     private fun fetch(initial: String, limit: Int): ByteArray {

@@ -32,6 +32,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -67,7 +68,13 @@ fun WandScopeRoot(state: AppUiState, viewModel: AppViewModel) {
         }
 
         state.updateInfo?.let { info ->
-            UpdateDialog(info, onDismiss = viewModel::dismissUpdate, onInstall = { viewModel.installUpdate(info) })
+            UpdateDialog(
+                info,
+                downloading = state.downloadingUpdate,
+                progress = state.updateDownloadProgress,
+                onDismiss = viewModel::dismissUpdate,
+                onInstall = { viewModel.installUpdate(info) },
+            )
         }
         if (state.updateMessage.isNotBlank()) {
             Box(
@@ -413,12 +420,35 @@ private fun SecondaryButton(text: String, enabled: Boolean, onClick: () -> Unit)
 }
 
 @Composable
-private fun UpdateDialog(info: UpdateInfo, onDismiss: () -> Unit, onInstall: () -> Unit) {
+private fun UpdateDialog(
+    info: UpdateInfo,
+    downloading: Boolean,
+    progress: Int?,
+    onDismiss: () -> Unit,
+    onInstall: () -> Unit,
+) {
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!downloading) onDismiss() },
         title = { Text("发现 WandScope ${info.versionName}") },
-        text = { Text("更新包下载后会先校验 SHA-256，再交给 Android 系统安装器。系统仍会要求你确认安装，应用不会静默更新。") },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("稍后") } },
-        confirmButton = { TextButton(onClick = onInstall) { Text("下载更新") } },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("更新包下载后会先校验 SHA-256，再交给 Android 系统安装器。系统仍会要求你确认安装，应用不会静默更新。")
+                if (downloading) {
+                    if (progress == null) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text("正在下载更新…", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())
+                        Text(
+                            if (progress < 92) "正在下载… $progress%" else if (progress < 100) "正在校验更新包…" else "准备打开系统安装器…",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        },
+        dismissButton = { if (!downloading) TextButton(onClick = onDismiss) { Text("稍后") } },
+        confirmButton = { TextButton(onClick = onInstall, enabled = !downloading) { Text(if (downloading) "下载中" else "下载更新") } },
     )
 }

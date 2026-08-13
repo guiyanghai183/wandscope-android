@@ -67,6 +67,21 @@ class MetricSelectionPolicyTest {
         assertEquals(selected, MetricSelectionPolicy.remove(selected, "missing"))
     }
 
+    @Test
+    fun `curve dismiss threshold requires a visible right drag`() {
+        assertEquals(false, CurveDismissPolicy.shouldDismiss(27f, 100f))
+        assertEquals(true, CurveDismissPolicy.shouldDismiss(100f, 100f))
+        assertEquals(false, CurveDismissPolicy.shouldDismiss(-20f, 100f))
+    }
+
+    @Test
+    fun `download progress reserves the final ten percent for verification`() {
+        assertEquals(null, UpdateProgressPolicy.percentage(20, -1))
+        assertEquals(0, UpdateProgressPolicy.percentage(0, 100))
+        assertEquals(45, UpdateProgressPolicy.percentage(50, 100))
+        assertEquals(90, UpdateProgressPolicy.percentage(100, 100))
+    }
+
     private fun metric(id: String, source: MetricSource, kind: MetricKind, plottable: Boolean) =
         MetricDefinition(id, id.substringAfter(':'), source, kind, "Charts", plottable)
 }

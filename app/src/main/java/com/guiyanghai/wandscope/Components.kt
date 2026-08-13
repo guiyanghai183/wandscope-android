@@ -4,6 +4,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,19 +42,21 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -66,6 +72,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private val ChartYAxisWidth = 54.dp
 private val ChartPlotHeight = 180.dp
@@ -184,7 +191,6 @@ fun EmptyCard(title: String, message: String) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MetricChart(
     title: String,
@@ -196,28 +202,46 @@ fun MetricChart(
         MetricChartCard(title, subtitle, series)
         return
     }
-    val currentOnRemove by rememberUpdatedState(onRemove)
-    val dismissState = rememberSwipeToDismissBoxState()
-    SwipeToDismissBox(
-        state = dismissState,
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)),
-        backgroundContent = {
-            Row(
-                Modifier.fillMaxSize().background(WandColors.Red).padding(horizontal = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = Color.White)
-                Text("移除曲线", color = Color.White, fontWeight = FontWeight.SemiBold)
-            }
-        },
-        enableDismissFromStartToEnd = true,
-        enableDismissFromEndToStart = false,
-        onDismiss = { direction ->
-            if (direction == SwipeToDismissBoxValue.StartToEnd) currentOnRemove()
-        },
+    var dragOffset by remember(title) { mutableFloatStateOf(0f) }
+    var dragging by remember(title) { mutableStateOf(false) }
+    var cardWidth by remember(title) { mutableFloatStateOf(1f) }
+    val threshold = cardWidth * 0.28f
+    val visibleOffset by animateFloatAsState(
+        targetValue = dragOffset,
+        animationSpec = if (dragging) snap() else spring(),
+        label = "curve-remove-offset",
+    )
+    Box(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+            .background(WandColors.Red),
     ) {
-        MetricChartCard(title, subtitle, series)
+        Row(
+            Modifier.matchParentSize().padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = Color.White)
+            Text("移除曲线", color = Color.White, fontWeight = FontWeight.SemiBold)
+        }
+        Box(
+            Modifier.fillMaxWidth()
+                .onSizeChanged { cardWidth = it.width.toFloat().coerceAtLeast(1f) }
+                .offset { IntOffset(visibleOffset.roundToInt(), 0) }
+                .draggable(
+                    orientation = Orientation.Horizontal,
+                    state = rememberDraggableState { delta ->
+                        dragOffset = (dragOffset + delta).coerceIn(0f, cardWidth)
+                    },
+                    onDragStarted = { dragging = true },
+                    onDragStopped = {
+                        dragging = false
+                        if (CurveDismissPolicy.shouldDismiss(dragOffset, threshold)) onRemove()
+                        else dragOffset = 0f
+                    },
+                ),
+        ) {
+            MetricChartCard(title, "$subtitle · 向右滑动移除", series)
+        }
     }
 }
 
