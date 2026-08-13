@@ -1,5 +1,9 @@
 package com.guiyanghai.wandscope
 
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.net.URI
 import java.util.Locale
 
@@ -82,14 +86,28 @@ object MetricSearchPolicy {
 }
 
 object CurveDismissPolicy {
-    fun shouldDismiss(offsetPx: Float, thresholdPx: Float): Boolean =
-        thresholdPx > 0f && offsetPx >= thresholdPx
+    fun shouldReveal(offsetPx: Float, thresholdPx: Float): Boolean =
+        thresholdPx > 0f && offsetPx <= -thresholdPx
 }
 
 object UpdateProgressPolicy {
     fun percentage(bytesRead: Long, totalBytes: Long): Int? {
         if (totalBytes <= 0L) return null
         return ((bytesRead.coerceIn(0L, totalBytes) * 90L) / totalBytes).toInt()
+    }
+}
+
+object RunTimeFormatter {
+    private val beijingZone = ZoneId.of("Asia/Shanghai")
+    private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss '北京时间'", Locale.CHINA)
+        .withZone(beijingZone)
+
+    fun beijing(raw: String): String {
+        if (raw.isBlank()) return "—"
+        val instant = runCatching { Instant.parse(raw) }.getOrElse {
+            runCatching { OffsetDateTime.parse(raw).toInstant() }.getOrNull() ?: return raw
+        }
+        return formatter.format(instant)
     }
 }
 
