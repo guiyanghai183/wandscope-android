@@ -21,4 +21,12 @@ class ReleaseUrlPolicyTest {
         assertFalse(ReleaseUrlPolicy.isAllowed("http://github.com/$repo/releases/download/v1/a.apk", repo))
         assertFalse(ReleaseUrlPolicy.isAllowed("https://github.com.evil.example/$repo/releases/download/v1/a.apk", repo))
     }
+
+    @Test
+    fun `only a missing release manifest maps to not published`() {
+        assertTrue(UpdateHttpPolicy.isMissingManifest(404))
+        assertFalse(UpdateHttpPolicy.isMissingManifest(401))
+        assertFalse(UpdateHttpPolicy.isMissingManifest(403))
+        assertFalse(UpdateHttpPolicy.isMissingManifest(500))
+    }
 }

@@ -80,6 +80,12 @@ data class UpdateInfo(
     val releaseUrl: String,
 )
 
+sealed interface UpdateCheckResult {
+    data class Available(val info: UpdateInfo) : UpdateCheckResult
+    data object UpToDate : UpdateCheckResult
+    data object NotPublished : UpdateCheckResult
+}
+
 sealed interface Screen {
     data object Projects : Screen
     data class ProjectOverview(val project: Project) : Screen

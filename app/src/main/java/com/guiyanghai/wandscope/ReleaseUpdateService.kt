@@ -22,10 +22,11 @@ class ReleaseUpdateService(private val context: Context) {
         .connectTimeout(15, TimeUnit.SECONDS).readTimeout(45, TimeUnit.SECONDS)
         .followRedirects(false).build()
 
-    suspend fun check(): UpdateInfo? = withContext(Dispatchers.IO) {
+    suspend fun check(): UpdateCheckResult = withContext(Dispatchers.IO) {
         val repo = BuildConfig.GITHUB_REPOSITORY
         val url = "https://github.com/$repo/releases/latest/download/update.json"
-        val json = JSONObject(fetch(url, 64 * 1024).toString(Charsets.UTF_8))
+        val manifest = fetchOptional(url, 64 * 1024) ?: return@withContext UpdateCheckResult.NotPublished
+        val json = JSONObject(manifest.toString(Charsets.UTF_8))
         val expected = setOf("versionCode", "versionName", "apkUrl", "sha256", "releaseUrl")
         if (json.keys().asSequence().toSet() != expected) throw IOException("update.json 字段不符合约定")
         val info = UpdateInfo(
@@ -38,7 +39,11 @@ class ReleaseUpdateService(private val context: Context) {
         ReleaseUrlPolicy.requireAllowed(info.apkUrl, repo)
         ReleaseUrlPolicy.requireAllowed(info.releaseUrl, repo)
         require(info.sha256.matches(Regex("[0-9a-f]{64}"))) { "SHA-256 格式错误" }
-        info.takeIf { it.versionCode > BuildConfig.VERSION_CODE }
+        if (info.versionCode > BuildConfig.VERSION_CODE) {
+            UpdateCheckResult.Available(info)
+        } else {
+            UpdateCheckResult.UpToDate
+        }
     }
 
     suspend fun downloadAndOpen(info: UpdateInfo) = withContext(Dispatchers.IO) {
@@ -63,6 +68,14 @@ class ReleaseUpdateService(private val context: Context) {
     }
 
     private fun fetch(initial: String, limit: Int): ByteArray {
+        return requireNotNull(fetchInternal(initial, limit, missingManifestIsEmpty = false))
+    }
+
+    private fun fetchOptional(initial: String, limit: Int): ByteArray? {
+        return fetchInternal(initial, limit, missingManifestIsEmpty = true)
+    }
+
+    private fun fetchInternal(initial: String, limit: Int, missingManifestIsEmpty: Boolean): ByteArray? {
         var current = initial
         repeat(6) {
             ReleaseUrlPolicy.requireAllowed(current, BuildConfig.GITHUB_REPOSITORY)
@@ -71,6 +84,7 @@ class ReleaseUpdateService(private val context: Context) {
                     current = response.header("Location") ?: throw IOException("更新地址重定向缺少 Location")
                     return@repeat
                 }
+                if (missingManifestIsEmpty && UpdateHttpPolicy.isMissingManifest(response.code)) return null
                 if (!response.isSuccessful) throw IOException("更新服务器返回 HTTP ${response.code}")
                 val body = response.body ?: throw IOException("更新响应为空")
                 if (body.contentLength() > limit) throw IOException("更新文件超过大小限制")

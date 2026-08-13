@@ -12,6 +12,7 @@ WandScope 是一个只读的原生 Android W&B 客户端，采用 Jetpack Compos
 - 首次读取只建立 Run 状态基线；此后 Run 进入 `finished`/`completed` 时通知。
 - 前台当前 Project 每 60 秒刷新；后台由 WorkManager 最快约 15 分钟、由 Android 系统择机执行。
 - 支持 GitHub Release `update.json` 检查、HTTPS 域名约束、APK SHA-256 校验和系统安装器确认。
+- 仓库尚未发布 Release 或缺少 `update.json` 时，更新检查会显示“当前没有可用的在线更新”，不会把 GitHub 404 显示为服务器故障。
 
 ## 构建
 

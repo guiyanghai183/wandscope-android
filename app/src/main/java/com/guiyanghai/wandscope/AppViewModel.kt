@@ -365,7 +365,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(checkingUpdate = true, updateMessage = if (silent) "" else "正在检查更新…") }
         viewModelScope.launch {
             runCatching { ReleaseUpdateService(getApplication()).check() }
-                .onSuccess { info -> _state.update { it.copy(checkingUpdate = false, updateInfo = info, updateMessage = if (!silent && info == null) "已是最新版本" else "") } }
+                .onSuccess { result ->
+                    _state.update {
+                        when (result) {
+                            is UpdateCheckResult.Available -> it.copy(
+                                checkingUpdate = false,
+                                updateInfo = result.info,
+                                updateMessage = "",
+                            )
+                            UpdateCheckResult.UpToDate -> it.copy(
+                                checkingUpdate = false,
+                                updateInfo = null,
+                                updateMessage = if (silent) "" else "已是最新版本",
+                            )
+                            UpdateCheckResult.NotPublished -> it.copy(
+                                checkingUpdate = false,
+                                updateInfo = null,
+                                updateMessage = if (silent) "" else "当前没有可用的在线更新",
+                            )
+                        }
+                    }
+                }
                 .onFailure { error -> _state.update { it.copy(checkingUpdate = false, updateMessage = if (silent) "" else safeMessage(error)) } }
         }
     }

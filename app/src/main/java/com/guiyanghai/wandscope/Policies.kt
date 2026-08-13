@@ -101,3 +101,7 @@ object ReleaseUrlPolicy {
         require(isAllowed(value, repository)) { "更新地址不受信任" }
     }
 }
+
+object UpdateHttpPolicy {
+    fun isMissingManifest(statusCode: Int): Boolean = statusCode == 404
+}
