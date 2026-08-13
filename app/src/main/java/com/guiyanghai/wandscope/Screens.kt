@@ -285,7 +285,7 @@ private fun RunRow(run: Run, onClick: () -> Unit) {
             }
             Row {
                 Text(run.name, Modifier.weight(1f), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                Text(run.heartbeatAt.ifBlank { run.createdAt }, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                Text(RunTimeFormatter.beijing(run.heartbeatAt.ifBlank { run.createdAt }), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
         }
     }
@@ -310,11 +310,11 @@ private fun RunDetailScreen(state: AppUiState, viewModel: AppViewModel) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             StatusPill(run.state)
                             Spacer(Modifier.weight(1f))
-                            Text(run.heartbeatAt.ifBlank { "—" }, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(RunTimeFormatter.beijing(run.heartbeatAt), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Row {
                             SmallValue("History", if (run.historyLineCount > 0) run.historyLineCount.toString() else "—", Modifier.weight(1f))
-                            SmallValue("最后更新", run.heartbeatAt.ifBlank { "—" }, Modifier.weight(1f))
+                            SmallValue("最后更新", RunTimeFormatter.beijing(run.heartbeatAt), Modifier.weight(1f))
                         }
                     }
                 }

@@ -12,7 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -27,13 +27,12 @@ class MainActivity : ComponentActivity() {
             WandScopeTheme {
                 val state by viewModel.state.collectAsStateWithLifecycle()
                 val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-                val requested = remember { getSharedPreferences("wandscope_permissions", MODE_PRIVATE) }
                 LaunchedEffect(state.loggedIn) {
                     if (
                         state.loggedIn && Build.VERSION.SDK_INT >= 33 &&
-                        !requested.getBoolean("notification_requested", false)
+                        ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) !=
+                        android.content.pm.PackageManager.PERMISSION_GRANTED
                     ) {
-                        requested.edit().putBoolean("notification_requested", true).apply()
                         permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 }

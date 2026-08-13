@@ -205,7 +205,8 @@ fun MetricChart(
     var dragOffset by remember(title) { mutableFloatStateOf(0f) }
     var dragging by remember(title) { mutableStateOf(false) }
     var cardWidth by remember(title) { mutableFloatStateOf(1f) }
-    val threshold = cardWidth * 0.28f
+    val revealWidth = cardWidth * 0.34f
+    val threshold = revealWidth * 0.4f
     val visibleOffset by animateFloatAsState(
         targetValue = dragOffset,
         animationSpec = if (dragging) snap() else spring(),
@@ -216,12 +217,21 @@ fun MetricChart(
             .background(WandColors.Red),
     ) {
         Row(
-            Modifier.matchParentSize().padding(horizontal = 20.dp),
+            Modifier.align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .fillMaxWidth(0.34f)
+                .clickable(onClick = onRemove)
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.Center,
         ) {
-            Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = Color.White)
-            Text("移除曲线", color = Color.White, fontWeight = FontWeight.SemiBold)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = Color.White)
+                Text("确认删除", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+            }
         }
         Box(
             Modifier.fillMaxWidth()
@@ -230,17 +240,16 @@ fun MetricChart(
                 .draggable(
                     orientation = Orientation.Horizontal,
                     state = rememberDraggableState { delta ->
-                        dragOffset = (dragOffset + delta).coerceIn(0f, cardWidth)
+                        dragOffset = (dragOffset + delta).coerceIn(-revealWidth, 0f)
                     },
                     onDragStarted = { dragging = true },
                     onDragStopped = {
                         dragging = false
-                        if (CurveDismissPolicy.shouldDismiss(dragOffset, threshold)) onRemove()
-                        else dragOffset = 0f
+                        dragOffset = if (CurveDismissPolicy.shouldReveal(dragOffset, threshold)) -revealWidth else 0f
                     },
                 ),
         ) {
-            MetricChartCard(title, "$subtitle · 向右滑动移除", series)
+            MetricChartCard(title, "$subtitle · 向左滑动管理", series)
         }
     }
 }

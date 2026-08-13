@@ -15,10 +15,25 @@ import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
+
+object RunCompletionPolicy {
+    fun isFinished(state: String): Boolean = state.lowercase() in setOf("finished", "completed")
+
+    fun notificationCandidates(
+        baselineInitialized: Boolean,
+        runs: List<Run>,
+        notifiedRunIds: Set<String>,
+    ): List<Run> = if (!baselineInitialized) {
+        emptyList()
+    } else {
+        runs.filter { isFinished(it.state) && it.id !in notifiedRunIds }
+    }
+}
 
 class RunCompletionTracker(private val context: Context) {
     private val preferences = AppPreferences(context)
@@ -27,16 +42,18 @@ class RunCompletionTracker(private val context: Context) {
         val scope = "$entity/$project"
         val previous = preferences.previousRunStates(scope)
         val notified = preferences.notifiedRunIds(scope)
-        if (!preferences.isRunBaselineInitialized(scope)) {
+        val baselineInitialized = preferences.isRunBaselineInitialized(scope)
+        if (!baselineInitialized) {
             runs.forEach { previous[it.id] = it.state }
-            runs.filter { isFinished(it.state) }.forEach { notified += it.id }
+            runs.filter { RunCompletionPolicy.isFinished(it.state) }.forEach { notified += it.id }
             preferences.saveRunStates(scope, previous)
             preferences.saveNotifiedRunIds(scope, notified)
             preferences.markRunBaselineInitialized(scope)
             return
         }
+        val candidateIds = RunCompletionPolicy.notificationCandidates(true, runs, notified).mapTo(mutableSetOf(), Run::id)
         runs.forEach { run ->
-            if (notify && isFinished(run.state) && run.id !in notified) {
+            if (notify && run.id in candidateIds) {
                 if (publish(project, run)) notified += run.id
             }
             previous[run.id] = run.state
@@ -54,12 +71,14 @@ class RunCompletionTracker(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Run 已完成")
             .setContentText("$project · ${run.displayName}")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$project · ${run.displayName} 已完成"))
             .setAutoCancel(true)
             .setContentIntent(pending)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
             .build()
         val permissionGranted = Build.VERSION.SDK_INT < 33 ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -67,8 +86,6 @@ class RunCompletionTracker(private val context: Context) {
         if (!permissionGranted || !manager.areNotificationsEnabled()) return false
         return runCatching { manager.notify(run.id.hashCode(), notification) }.isSuccess
     }
-
-    private fun isFinished(state: String) = state.lowercase() in setOf("finished", "completed")
 
     companion object {
         const val CHANNEL_ID = "run_completion"
@@ -100,18 +117,28 @@ class RunMonitorWorker(appContext: Context, params: WorkerParameters) : Coroutin
 
     companion object {
         private const val WORK_NAME = "wandscope_run_monitor"
+        private const val IMMEDIATE_WORK_NAME = "wandscope_run_monitor_immediate"
 
         fun schedule(context: Context) {
+            val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
             val request = PeriodicWorkRequestBuilder<RunMonitorWorker>(15, TimeUnit.MINUTES)
-                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setConstraints(constraints)
                 .build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
                 ExistingPeriodicWorkPolicy.UPDATE,
                 request,
             )
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                IMMEDIATE_WORK_NAME,
+                androidx.work.ExistingWorkPolicy.REPLACE,
+                OneTimeWorkRequestBuilder<RunMonitorWorker>().setConstraints(constraints).build(),
+            )
         }
 
-        fun cancel(context: Context) = WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        fun cancel(context: Context) {
+            WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+            WorkManager.getInstance(context).cancelUniqueWork(IMMEDIATE_WORK_NAME)
+        }
     }
 }

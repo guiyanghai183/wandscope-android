@@ -68,10 +68,10 @@ class MetricSelectionPolicyTest {
     }
 
     @Test
-    fun `curve dismiss threshold requires a visible right drag`() {
-        assertEquals(false, CurveDismissPolicy.shouldDismiss(27f, 100f))
-        assertEquals(true, CurveDismissPolicy.shouldDismiss(100f, 100f))
-        assertEquals(false, CurveDismissPolicy.shouldDismiss(-20f, 100f))
+    fun `curve delete action is revealed only by a sufficient left drag`() {
+        assertEquals(false, CurveDismissPolicy.shouldReveal(-27f, 100f))
+        assertEquals(true, CurveDismissPolicy.shouldReveal(-100f, 100f))
+        assertEquals(false, CurveDismissPolicy.shouldReveal(20f, 100f))
     }
 
     @Test
@@ -82,6 +82,37 @@ class MetricSelectionPolicyTest {
         assertEquals(90, UpdateProgressPolicy.percentage(100, 100))
     }
 
+    @Test
+    fun `run timestamps are rendered as standard Beijing time`() {
+        assertEquals("2026-08-13 14:24:09 北京时间", RunTimeFormatter.beijing("2026-08-13T06:24:09Z"))
+        assertEquals("2026-08-13 14:24:09 北京时间", RunTimeFormatter.beijing("2026-08-13T14:24:09+08:00"))
+        assertEquals("—", RunTimeFormatter.beijing(""))
+        assertEquals("not-a-time", RunTimeFormatter.beijing("not-a-time"))
+    }
+
+    @Test
+    fun `run completion notifications skip baseline and notify new finished runs once`() {
+        val running = run("running", "running")
+        val finished = run("finished", "finished")
+        val completed = run("completed", "completed")
+        val failed = run("failed", "failed")
+
+        assertEquals(
+            emptyList<Run>(),
+            RunCompletionPolicy.notificationCandidates(false, listOf(finished), emptySet()),
+        )
+        assertEquals(
+            listOf(finished, completed),
+            RunCompletionPolicy.notificationCandidates(true, listOf(running, finished, completed, failed), emptySet()),
+        )
+        assertEquals(
+            listOf(completed),
+            RunCompletionPolicy.notificationCandidates(true, listOf(finished, completed), setOf(finished.id)),
+        )
+    }
+
     private fun metric(id: String, source: MetricSource, kind: MetricKind, plottable: Boolean) =
         MetricDefinition(id, id.substringAfter(':'), source, kind, "Charts", plottable)
+
+    private fun run(id: String, state: String) = Run(id, id, id, state)
 }

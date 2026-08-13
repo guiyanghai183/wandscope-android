@@ -16,11 +16,11 @@
 
 ```json
 {
-  "versionCode": 4,
-  "versionName": "1.0.3",
-  "apkUrl": "https://github.com/guiyanghai183/wandscope-android/releases/download/v1.0.3/WandScope-1.0.3.apk",
+  "versionCode": 5,
+  "versionName": "1.0.4",
+  "apkUrl": "https://github.com/guiyanghai183/wandscope-android/releases/download/v1.0.4/WandScope-1.0.4.apk",
   "sha256": "<64位小写SHA-256>",
-  "releaseUrl": "https://github.com/guiyanghai183/wandscope-android/releases/tag/v1.0.3"
+  "releaseUrl": "https://github.com/guiyanghai183/wandscope-android/releases/tag/v1.0.4"
 }
 ```
 

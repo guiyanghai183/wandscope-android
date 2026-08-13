@@ -235,13 +235,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             runCatching { activeApi.runDetails(project.entity, project.name, run.id) }
                 .onSuccess { details ->
                     if (parentSerial != requestSerial) return@onSuccess
+                    val allowed = details.metrics.map(MetricDefinition::id).toSet()
+                    val normalized = _state.value.projectSelection.filter { it in allowed }.take(8)
                     _state.update { current ->
-                        val allowed = details.metrics.map(MetricDefinition::id).toSet()
                         current.copy(
                             projectMetrics = details.metrics,
-                            projectSelection = current.projectSelection.filter { it in allowed }.take(8),
+                            projectSelection = normalized,
                         )
                     }
+                    if (normalized.isNotEmpty()) loadProjectCurves()
                 }
         }
     }
@@ -273,7 +275,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 .onSuccess { details ->
                     if (serial != requestSerial) return@onSuccess
                     val allowed = details.metrics.map(MetricDefinition::id).toSet()
-                    _state.update { it.copy(runDetails = details, currentRun = details.run, runSelection = it.runSelection.filter { id -> id in allowed }.take(8), loading = false) }
+                    val normalized = _state.value.runSelection.filter { id -> id in allowed }.take(8)
+                    _state.update {
+                        it.copy(runDetails = details, currentRun = details.run, runSelection = normalized, loading = false)
+                    }
+                    if (normalized.isNotEmpty()) loadRunCurves()
                 }.onFailure { error ->
                     if (serial == requestSerial) _state.update { it.copy(loading = false, error = safeMessage(error)) }
                 }
